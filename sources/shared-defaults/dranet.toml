@@ -1,0 +1,49 @@
+# DRANET DRA driver (network devices) service.
+#
+# The driver runs as a host systemd service (not a Helm-installed DaemonSet). Its
+# ExecStart is rendered from settings, because it needs the node name from
+# settings.kubernetes.hostname-override, plus the bind address and the set of
+# advertised devices from settings.kubelet-dra-drivers.net.
+[services.dranet]
+restart-commands = [
+    "/bin/systemctl try-reload-or-restart dranet.service",
+]
+configuration-files = [
+    "dranet-exec-start-conf",
+    "dranet-disabled-marker",
+]
+
+[configuration-files.dranet-exec-start-conf]
+path = "/etc/systemd/system/dranet.service.d/exec-start.conf"
+template-path = "/usr/share/templates/dranet-exec-start-conf"
+
+# Marker file gating the unit's negated ConditionFileNotEmpty. Rendered non-empty
+# ("stop") only when settings.kubelet-dra-drivers.net.enabled is false, so the
+# service runs unless a node turns it off. A node with no settings extension renders
+# no marker, and an absent marker also runs the service.
+[configuration-files.dranet-disabled-marker]
+path = "/etc/dranet/disabled"
+template-path = "/usr/share/templates/dranet-disabled-marker"
+
+# On by default. Setting enabled to false is what stops the service. bind-address
+# keeps the metrics and healthz server on localhost, because a host service gets no
+# kubelet probe and an open port on every node interface buys nothing.
+#
+# advertised-devices takes "efa". The template, not this file, holds the CEL
+# expression that the value maps to, and "efa" is also what the template falls back
+# to when this setting is unset. The EFA expression is the one the
+# AWS-supported aws-dranet Helm chart passes, and it keys on the same attribute as
+# the efa.networking.k8s.aws DeviceClass.
+#
+# The enum keeps the driver's own default out of reach. That default excludes veth
+# devices only, so on EKS it advertises the secondary ENIs the Amazon VPC CNI
+# manages, and claiming one of those takes pod networking with it.
+[settings.kubelet-dra-drivers.net]
+enabled = true
+bind-address = "127.0.0.1:9177"
+advertised-devices = "efa"
+
+# Re-render the drop-in and the marker, then restart the service, when any of the
+# three settings changes.
+[metadata.settings.kubelet-dra-drivers.net]
+affected-services = ["dranet"]
