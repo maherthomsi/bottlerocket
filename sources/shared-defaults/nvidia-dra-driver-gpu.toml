@@ -31,6 +31,8 @@ template-path = "/usr/share/templates/nvidia-dra-driver-gpu-enabled-marker"
 [settings.kubelet-dra-drivers.nvidia]
 enabled = false
 
-# Re-render + restart the service when the toggle (or node name) changes.
+# Re-render + restart the services when the toggle (or node name) changes. dranet
+# is listed here because its marker reads this same setting; the rest of its
+# registration lives in shared-defaults/dranet.toml.
 [metadata.settings.kubelet-dra-drivers.nvidia.enabled]
-affected-services = ["nvidia-dra-driver-gpu"]
+affected-services = ["nvidia-dra-driver-gpu", "dranet"]

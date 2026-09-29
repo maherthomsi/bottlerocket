@@ -1,0 +1,23 @@
+# DRANET DRA driver (network devices) service.
+#
+# The driver runs as a host systemd service (not a Helm-installed DaemonSet).
+# Its ExecStart is rendered from settings because it needs the node name from
+# settings.kubernetes.hostname-override.
+#
+# There is no dedicated enable toggle and no marker of its own. The unit gates on
+# ConditionFileNotEmpty=/etc/nvidia-dra-driver-gpu/enabled, the marker that
+# shared-defaults/nvidia-dra-driver-gpu.toml renders, so network DRA runs exactly
+# when GPU DRA runs. The default for settings.kubelet-dra-drivers.nvidia.enabled
+# and the affected-services metadata also live in that file, which is where dranet
+# is listed so a settings change re-renders and restarts both services.
+[services.dranet]
+restart-commands = [
+    "/bin/systemctl try-reload-or-restart dranet.service",
+]
+configuration-files = [
+    "dranet-exec-start-conf",
+]
+
+[configuration-files.dranet-exec-start-conf]
+path = "/etc/systemd/system/dranet.service.d/exec-start.conf"
+template-path = "/usr/share/templates/dranet-exec-start-conf"
