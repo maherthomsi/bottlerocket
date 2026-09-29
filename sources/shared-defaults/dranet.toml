@@ -1,0 +1,52 @@
+# DRANET DRA driver (network devices) service.
+#
+# The driver runs as a host systemd service (not a Helm-installed DaemonSet). Its
+# ExecStart is rendered from settings, because it needs the node name from
+# settings.kubernetes.hostname-override, plus the bind address and the device
+# filter from settings.kubelet-dra-drivers.net.
+[services.dranet]
+restart-commands = [
+    "/bin/systemctl try-reload-or-restart dranet.service",
+]
+configuration-files = [
+    "dranet-exec-start-conf",
+    "dranet-enabled-marker",
+]
+
+[configuration-files.dranet-exec-start-conf]
+path = "/etc/systemd/system/dranet.service.d/exec-start.conf"
+template-path = "/usr/share/templates/dranet-exec-start-conf"
+
+# Marker file gating the unit's ConditionFileNotEmpty. Rendered non-empty ("run")
+# only when settings.kubelet-dra-drivers.net.enabled is true. Absent when the
+# settings extension is not present, so network DRA is off by default then too.
+[configuration-files.dranet-enabled-marker]
+path = "/etc/dranet/enabled"
+template-path = "/usr/share/templates/dranet-enabled-marker"
+
+# Opt-in by default. bind-address keeps the metrics and healthz server on
+# localhost, because a host service gets no kubelet probe and an open port on
+# every node interface buys nothing.
+#
+# device-filter below is the ONLY copy of the expression. The unit passes no
+# --filter of its own, and the template renders the flag only when this setting
+# holds a non-empty value. The shipped value publishes EFA devices only, using the
+# expression the AWS-supported aws-dranet Helm chart passes; it keys on the same
+# attribute as the efa.networking.k8s.aws DeviceClass.
+#
+# Removing this default, rather than emptying it, is what leaves the driver to its
+# own default of excluding veth devices only. An OS built without this file gets
+# that behavior, which on EKS publishes the secondary ENIs the VPC CNI manages.
+#
+# A device-filter that fails to evaluate keeps every device, so a wrong expression
+# publishes more than intended. On EKS that includes the secondary ENIs the Amazon
+# VPC CNI manages, and claiming one of those takes pod networking with it.
+[settings.kubelet-dra-drivers.net]
+enabled = false
+bind-address = "127.0.0.1:9177"
+device-filter = '"dra.net/pciDevice" in attributes && attributes["dra.net/pciDevice"].StringValue == "Elastic Fabric Adapter (EFA)"'
+
+# Re-render the drop-in and the marker, then restart the service, when any of the
+# three settings changes.
+[metadata.settings.kubelet-dra-drivers.net]
+affected-services = ["dranet"]
